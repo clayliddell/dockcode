@@ -48,7 +48,7 @@ AUTH_CONFIG="$(get_config AUTH_CONFIG "$DEFAULT_AUTH_CONFIG")"
 
 # ─── Helpers ──────────────────────────────────────────────────────────────────
 info() { echo "$*"; }
-error() { echo "ERROR: $*" >&2; }
+error() { echo "$*" >&2; }
 
 prompt_choice() {
   local prompt="$1"
@@ -64,7 +64,7 @@ prompt_choice() {
     done
     printf "\nChoice [1-%d]: " $# >&2
     read -r choice
-    if [[ "$choice" =~ ^[1-$#]$ ]]; then
+    if [[ "$choice" =~ ^[0-9]+$ ]] && (( choice >= 1 && choice <= $# )); then
       echo "$choice"
       return
     fi
@@ -153,23 +153,20 @@ build_image() {
   info "Building custom sandbox image..."
   local build_ctx
   build_ctx=$(mktemp -d)
+  trap 'rm -rf "$build_ctx"' RETURN
   cp "$OPENCODE_CONFIG" "${build_ctx}/opencode.json"
   cp "${SCRIPT_DIR}/Dockerfile" "${build_ctx}/Dockerfile"
   docker build -t "$TEMPLATE" "$build_ctx"
-  rm -rf "$build_ctx"
 }
 
 # ─── Inject auth.json ─────────────────────────────────────────────────────────
 inject_auth() {
   local auth_path="$1" sandbox_name="$2"
+  local remote_dir="/home/agent/.local/share/opencode"
 
-  docker sandbox exec "$sandbox_name" bash -c "
-mkdir -p ~/.local/share/opencode
-cat > ~/.local/share/opencode/auth.json << 'INNER_EOF'
-$(cat "$auth_path")
-INNER_EOF
-chmod 600 ~/.local/share/opencode/auth.json
-"
+  docker sandbox exec "$sandbox_name" bash -c "mkdir -p ${remote_dir}"
+  docker sandbox exec -i "$sandbox_name" bash -c "cat > ${remote_dir}/auth.json" < "$auth_path"
+  docker sandbox exec "$sandbox_name" bash -c "chmod 600 ${remote_dir}/auth.json"
 }
 
 # ─── Create and run sandbox ───────────────────────────────────────────────────
@@ -195,6 +192,11 @@ create_sandbox() {
     --bypass-host openrouter.ai
 
   info "Injecting auth.json..."
+  if grep -q "CHANGE-ME" "$AUTH_CONFIG" 2>/dev/null; then
+    error "auth.json still contains placeholder API key (CHANGE-ME)."
+    error "Edit $AUTH_CONFIG to set your OpenRouter API key."
+    exit 1
+  fi
   inject_auth "$AUTH_CONFIG" "$name"
 
   echo ""
@@ -223,6 +225,10 @@ Commands:
 
       -n    Sandbox name (default: current directory name)
       -w    Workspace directory (default: current directory)
+
+Options:
+  -h, --help                           Show this help message
+  --version                            Show version
 EOF
   exit 1
 }
@@ -288,8 +294,13 @@ handle_launch() {
 
   # Check if sandbox already exists
   local existing
-  existing=$(docker sandbox ls --json 2>/dev/null | \
-    grep -o "\"name\": *\"${name}\"" || true)
+  if command -v jq >/dev/null 2>&1; then
+    existing=$(docker sandbox ls --json 2>/dev/null | \
+      jq -e --arg n "$name" '.[] | select(.name == $n)' 2>/dev/null || true)
+  else
+    existing=$(docker sandbox ls --json 2>/dev/null | \
+      grep -o "\"name\": *\"${name}\"" || true)
+  fi
   if [ -n "$existing" ]; then
     info "Launching existing sandbox '$name'..."
     docker sandbox run "$name"
@@ -313,6 +324,12 @@ handle_launch() {
 # ═══════════════════════════════════════════════════════════════════════════════
 
 case "${1:-}" in
+  -h|--help)
+    show_usage
+    ;;
+  --version)
+    echo "dockcode v1"
+    ;;
   config)
     case "${2:-}" in
       show)  handle_config_show ;;

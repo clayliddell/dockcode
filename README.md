@@ -4,9 +4,9 @@ Wrapper for building and managing custom Docker Sandbox templates for running [O
 
 ## Why Sandbox OpenCode?
 
-OpenCode put's up guardrails to try preventing LLM's running in it from modifying the host system without approval. This approach, however, has 2 problems:
+OpenCode puts up guardrails to try preventing LLMs running in it from modifying the host system without approval. This approach, however, has 2 problems:
 
-1. OpenCode has to continually prompt for any permissions you don't grant it from the outset (reading/writing files outside of it's permitted directory, running CLI commands which could modify the host, etc.)
+1. OpenCode has to continually prompt for any permissions you don't grant it from the outset (reading/writing files outside of its permitted directory, running CLI commands which could modify the host, etc.)
 2. Even with these guardrails in place, more clever LLMs will still try to bypass these guardrails by finding clever ways to do things (i.e. running obfuscated scripts). So your host computer is never truly protected against a rogue LLM looking to do something destructive...
 
 **Enter Docker Sandboxes**
@@ -58,6 +58,10 @@ Commands:
 
       -n    Sandbox name (default: current directory name)
       -w    Workspace directory (default: current directory)
+
+Options:
+  -h, --help                           Show this help message
+  --version                            Show version
 ```
 
 ## Config Management
