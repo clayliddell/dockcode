@@ -44,7 +44,7 @@ dockcode launch
 
 ## Usage
 
-```
+```bash
 Usage: dockcode <command> [args...]
 
 Commands:
