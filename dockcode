@@ -73,6 +73,22 @@ prompt_choice() {
 	done
 }
 
+# ─── Sandbox listing ─────────────────────────────────────────────────────────
+get_sandbox_names() {
+	local sandbox_json
+	sandbox_json=$(docker sandbox ls --json 2>/dev/null || echo '{"vms":[]}')
+
+	if command -v jq >/dev/null 2>&1; then
+		echo "${sandbox_json}" | jq -r '.vms[].name' 2>/dev/null
+	else
+		while IFS= read -r line; do
+			local sname
+			sname=$(echo "${line}" | grep -o '"name": *"[^"]*"' | sed 's/"name": *"//;s/"$//' || true)
+			[[ -n ${sname} ]] && echo "${sname}"
+		done < <(echo "${sandbox_json}" | tr ',' '\n')
+	fi
+}
+
 # ─── Resolve config file ─────────────────────────────────────────────────────
 # Args: resolve_config <target_path> <default_path> <label> <filename> <host_path>
 resolve_config() {
@@ -145,7 +161,7 @@ build_image() {
 	info "Building custom sandbox image..."
 	local build_ctx=""
 	build_ctx=$(mktemp -d)
-	trap 'rm -rf "${build_ctx}"' EXIT
+	trap "rm -rf \"${build_ctx}\"" EXIT
 	cp "${OPENCODE_CONFIG}" "${build_ctx}/opencode.json"
 	cp "${SCRIPT_DIR}/Dockerfile" "${build_ctx}/Dockerfile"
 	docker build -t "${TEMPLATE}" "${build_ctx}"
@@ -212,6 +228,10 @@ Commands:
         opencode.json    Path to opencode.json
         auth.json        Path to auth.json
 
+  ls [--json]                          List existing sandboxes
+  destroy [-n name]                    Destroy a sandbox
+                                        (interactive if no flags given)
+
   launch [-n name] [-w workspace]      Launch or create a sandbox
                                         (interactive if no flags given)
 
@@ -262,22 +282,93 @@ handle_config_update() {
 	info "Updated ${key} = ${value}"
 }
 
-interactive_launch() {
-	local sandbox_json
-	sandbox_json=$(docker sandbox ls --json 2>/dev/null || echo '{"vms":[]}')
+handle_ls() {
+	if [[ ${1-} == "--json" ]]; then
+		docker sandbox ls --json 2>/dev/null || echo '{"vms":[]}'
+		return
+	fi
 
 	local sandbox_names=()
-	if command -v jq >/dev/null 2>&1; then
+	while IFS= read -r sname; do
+		[[ -n ${sname} ]] && sandbox_names+=("${sname}")
+	done < <(get_sandbox_names)
+
+	if [[ ${#sandbox_names[@]} -eq 0 ]]; then
+		info "No sandboxes found."
+		return
+	fi
+
+	echo ""
+	echo "Sandboxes:"
+	echo ""
+	local i=1
+	for sname in "${sandbox_names[@]}"; do
+		echo "  ${i}) ${sname}"
+		((i++))
+	done
+	echo ""
+	echo "Total: ${#sandbox_names[@]}"
+}
+
+handle_destroy() {
+	local name=""
+
+	while [[ $# -gt 0 ]]; do
+		case "$1" in
+		-n)
+			name="${2-}"
+			if [[ -z ${name} ]]; then
+				error "Flag -n requires a value."
+				exit 1
+			fi
+			shift 2
+			;;
+		*)
+			error "Unknown flag: $1"
+			exit 1
+			;;
+		esac
+	done
+
+	if [[ -z ${name} ]]; then
+		local sandbox_names=()
 		while IFS= read -r sname; do
 			[[ -n ${sname} ]] && sandbox_names+=("${sname}")
-		done < <(echo "${sandbox_json}" | jq -r '.vms[].name' 2>/dev/null)
-	else
-		while IFS= read -r line; do
-			local sname
-			sname=$(echo "${line}" | grep -o '"name": *"[^"]*"' | sed 's/"name": *"//;s/"$//' || true)
-			[[ -n ${sname} ]] && sandbox_names+=("${sname}")
-		done < <(echo "${sandbox_json}" | tr ',' '\n')
+		done < <(get_sandbox_names)
+
+		if [[ ${#sandbox_names[@]} -eq 0 ]]; then
+			info "No sandboxes to destroy."
+			return
+		fi
+
+		local menu_options=()
+		for sname in "${sandbox_names[@]}"; do
+			menu_options+=("${sname}")
+		done
+
+		local choice
+		choice=$(prompt_choice "Which sandbox would you like to destroy?" "${menu_options[@]}")
+		name="${sandbox_names[$((choice - 1))]}"
 	fi
+
+	printf "Are you sure you want to destroy sandbox '%s'? [y/N] " "${name}"
+	local confirm
+	read -r confirm
+	if [[ ! ${confirm} =~ ^(y|Y|yes|Yes)$ ]]; then
+		info "Aborted."
+		return
+	fi
+
+	info "Destroying sandbox '${name}'..."
+	docker sandbox rm "${name}"
+	info "Sandbox '${name}' has been destroyed."
+}
+
+interactive_launch() {
+	local sandbox_names=()
+	while IFS= read -r sname; do
+		[[ -n ${sname} ]] && sandbox_names+=("${sname}")
+	done < <(get_sandbox_names)
 
 	local menu_options=()
 	for sname in "${sandbox_names[@]}"; do
@@ -329,8 +420,8 @@ handle_launch() {
 		case "$1" in
 		-n)
 			has_flags=true
-			name="${2:-}" # Safely read with a fallback
-			if [[ -z "${name}" ]]; then
+			name="${2-}" # Safely read with a fallback
+			if [[ -z ${name} ]]; then
 				error "Flag -n requires a value."
 				exit 1
 			fi
@@ -338,8 +429,8 @@ handle_launch() {
 			;;
 		-w)
 			has_flags=true
-			workspace="${2:-}"
-			if [[ -z "${workspace}" ]]; then
+			workspace="${2-}"
+			if [[ -z ${workspace} ]]; then
 				error "Flag -w requires a value."
 				exit 1
 			fi
@@ -411,6 +502,14 @@ config)
 	update) handle_config_update "${3-}" "${4-}" ;;
 	*) show_usage ;;
 	esac
+	;;
+ls)
+	shift
+	handle_ls "$@"
+	;;
+destroy)
+	shift
+	handle_destroy "$@"
 	;;
 launch)
 	shift

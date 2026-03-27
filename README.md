@@ -58,6 +58,10 @@ Commands:
         opencode.json    Path to opencode.json
         auth.json        Path to auth.json
 
+  ls [--json]                          List existing sandboxes
+  destroy [-n name]                    Destroy a sandbox
+                                        (interactive if no flags given)
+
   launch [-n name] [-w workspace]      Launch or create a sandbox
                                         (interactive if no flags given)
 
@@ -92,6 +96,56 @@ dockcode config update opencode.json ~/my-opencode.json
 
 # Use a custom auth.json
 dockcode config update auth.json ~/my-auth.json
+```
+
+## List Command
+
+List all existing sandboxes:
+
+```bash
+dockcode ls
+```
+
+```
+Sandboxes:
+
+  1) my-project
+  2) other-project
+
+Total: 2
+```
+
+Pass `--json` for raw JSON output:
+
+```bash
+dockcode ls --json
+```
+
+## Destroy Command
+
+### Interactive mode
+
+Running `destroy` with no flags opens an interactive dialog to pick a sandbox:
+
+```bash
+dockcode destroy
+```
+
+```
+Which sandbox would you like to destroy?
+
+  1) my-project
+  2) other-project
+
+Choice [1-2]:
+```
+
+You will be prompted to confirm before the sandbox is removed.
+
+### Non-interactive (flags)
+
+```bash
+dockcode destroy -n my-sandbox
 ```
 
 ## Launch Command
@@ -141,7 +195,7 @@ If a sandbox with the given name already exists, it is launched directly. Otherw
 | `Dockerfile` | Extends `docker/sandbox-templates:opencode` with OpenCode config |
 | `opencode.json` | Default OpenCode config (OpenRouter models, permissions) |
 | `auth.example.json` | Default auth template (copy and edit to set your API key) |
-| `dockcode` | CLI with config management and sandbox launch |
+| `dockcode` | CLI with config management, sandbox launch, list, and destroy |
 
 ## Configuration
 
