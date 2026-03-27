@@ -140,7 +140,7 @@ resolve_config() {
 			printf "Enter path: "
 			read -r custom_path
 			custom_path="${custom_path/#\~/${HOME}}"
-			if [[ -f ${custom_path} ]]; then
+			if [[ ! -f ${custom_path} ]]; then
 				error "File not found: ${custom_path}"
 				continue 2
 			fi
