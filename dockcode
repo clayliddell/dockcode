@@ -213,6 +213,7 @@ Commands:
         auth.json        Path to auth.json
 
   launch [-n name] [-w workspace]      Launch or create a sandbox
+                                        (interactive if no flags given)
 
       -n    Sandbox name (default: current directory name)
       -w    Workspace directory (default: current directory)
@@ -261,12 +262,73 @@ handle_config_update() {
 	info "Updated ${key} = ${value}"
 }
 
+interactive_launch() {
+	local sandbox_json
+	sandbox_json=$(docker sandbox ls --json 2>/dev/null || echo '{"vms":[]}')
+
+	local sandbox_names=()
+	if command -v jq >/dev/null 2>&1; then
+		while IFS= read -r sname; do
+			[[ -n ${sname} ]] && sandbox_names+=("${sname}")
+		done < <(echo "${sandbox_json}" | jq -r '.vms[].name' 2>/dev/null)
+	else
+		while IFS= read -r line; do
+			local sname
+			sname=$(echo "${line}" | grep -o '"name": *"[^"]*"' | sed 's/"name": *"//;s/"$//' || true)
+			[[ -n ${sname} ]] && sandbox_names+=("${sname}")
+		done < <(echo "${sandbox_json}" | tr ',' '\n')
+	fi
+
+	local menu_options=()
+	for sname in "${sandbox_names[@]}"; do
+		menu_options+=("Launch existing sandbox: ${sname}")
+	done
+	menu_options+=("Create a new sandbox")
+
+	local choice
+	choice=$(prompt_choice "What would you like to do?" "${menu_options[@]}")
+
+	if ((choice <= ${#sandbox_names[@]})); then
+		local selected="${sandbox_names[$((choice - 1))]}"
+		info "Launching existing sandbox '${selected}'..."
+		docker sandbox run "${selected}"
+		return
+	fi
+
+	local name workspace
+	printf "Sandbox name (default: current directory name): "
+	read -r name
+	if [[ -z ${name} ]]; then
+		name="$(basename "$(pwd)" | tr '.' '-')"
+	fi
+
+	printf "Workspace path (default: current directory): "
+	read -r workspace
+	workspace="${workspace:-.}"
+	workspace="${workspace/#\~/${HOME}}"
+	if [[ ! -d ${workspace} ]]; then
+		error "Workspace directory does not exist: ${workspace}"
+		exit 1
+	fi
+	workspace="$(realpath "${workspace}")"
+
+	resolve_config "${OPENCODE_CONFIG}" "${SCRIPT_DIR}/opencode.json" \
+		"opencode.json" "opencode.json" "${HOME}/.config/opencode/opencode.json"
+	resolve_config "${AUTH_CONFIG}" "${SCRIPT_DIR}/auth.example.json" \
+		"auth.json" "auth.example.json" "${HOME}/.local/share/opencode/auth.json"
+
+	create_sandbox "${name}" "${workspace}"
+	read -n 1 -s -r -p "Press any key to launch OpenCode sandbox..."
+	docker sandbox run "${name}"
+}
+
 handle_launch() {
-	local name="" workspace=""
+	local name="" workspace="" has_flags=false
 
 	while [[ $# -gt 0 ]]; do
 		case "$1" in
 		-n)
+			has_flags=true
 			name="${2:-}" # Safely read with a fallback
 			if [[ -z "${name}" ]]; then
 				error "Flag -n requires a value."
@@ -275,6 +337,7 @@ handle_launch() {
 			shift 2
 			;;
 		-w)
+			has_flags=true
 			workspace="${2:-}"
 			if [[ -z "${workspace}" ]]; then
 				error "Flag -w requires a value."
@@ -288,6 +351,11 @@ handle_launch() {
 			;;
 		esac
 	done
+
+	if [[ ${has_flags} == false ]]; then
+		interactive_launch
+		return
+	fi
 
 	workspace="${workspace:-.}"
 	if [[ ! -d ${workspace} ]]; then

@@ -37,9 +37,12 @@ The API key is never stored in the image — only injected at sandbox creation t
 ## Quick Start
 
 ```bash
-# Launch from any project directory
-cd ~/my-project
+# Launch interactively — choose an existing sandbox or create a new one
 dockcode launch
+
+# Or launch directly from a project directory
+cd ~/my-project
+dockcode launch -n my-project -w .
 ```
 
 ## Usage
@@ -56,6 +59,7 @@ Commands:
         auth.json        Path to auth.json
 
   launch [-n name] [-w workspace]      Launch or create a sandbox
+                                        (interactive if no flags given)
 
       -n    Sandbox name (default: current directory name)
       -w    Workspace directory (default: current directory)
@@ -92,10 +96,34 @@ dockcode config update auth.json ~/my-auth.json
 
 ## Launch Command
 
+### Interactive mode
+
+Running `launch` with no flags opens an interactive dialog:
+
+```bash
+dockcode launch
+```
+
+You will be presented with a menu:
+
+```
+What would you like to do?
+  1) Launch existing sandbox: my-project
+  2) Launch existing sandbox: other-project
+  3) Create a new sandbox
+
+Choice [1-3]:
+```
+
+- **Launch an existing sandbox** — select from sandboxes already created via `docker sandbox ls`.
+- **Create a new sandbox** — prompts for a sandbox name (defaults to the current directory name) and a workspace path (defaults to the current directory, supports `~` expansion).
+
+### Non-interactive (flags)
+
 ```bash
 # Launch in current directory (sandbox named after directory)
 cd ~/my-project
-dockcode launch
+dockcode launch -n my-project -w .
 
 # Launch with custom name and workspace
 dockcode launch -n my-sandbox -w ~/other-project
