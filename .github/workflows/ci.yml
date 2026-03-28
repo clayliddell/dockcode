@@ -4,7 +4,7 @@ jobs:
   lint:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - name: ShellCheck
         run: shellcheck dockcode
       - name: shfmt
@@ -17,7 +17,7 @@ jobs:
     needs: lint
     steps:
       - name: Checkout repo and modules
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           # 'recursive' checks out all submodules, including nested ones (bats)
           submodules: recursive
