@@ -17,6 +17,7 @@ jobs:
     needs: lint
     steps:
       - uses: actions/checkout@v4
-      - uses: bats-core/setup-bats-action@v2
       - name: Run tests
-        run: bats test/
+        run: |
+          chmod +x ./test/bats/bin/bats
+          ./test/bats/bin/bats test
