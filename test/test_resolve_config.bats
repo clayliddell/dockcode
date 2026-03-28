@@ -31,6 +31,46 @@ load test_helper
 	grep -q '"default":true' "${target}"
 }
 
+@test "resolve_config: choice 2 uses host config in-place" {
+	local target="${TEST_TMPDIR}/new.json"
+	local default="${TEST_TMPDIR}/default.json"
+	echo '{"default":true}' >"${default}"
+	local host_file="${TEST_TMPDIR}/host.json"
+	echo '{"host":true}' >"${host_file}"
+
+	# Choice 2 calls handle_config_update which sets OPENCODE_CONFIG to the host path
+	run bash -c '
+		source "'"${SCRIPT_DIR}"'/dockcode"
+		export DOCKCODE_CONFIG_DIR="'"${DOCKCODE_CONFIG_DIR}"'"
+		export CONFIG_FILE="'"${CONFIG_FILE}"'"
+		printf "2" | resolve_config "'"${target}"'" "'"${default}"'" "opencode.json" "opencode.json" "'"${host_file}"'"
+	'
+	[[ "${status}" -eq 0 ]]
+	result="$(get_config OPENCODE_CONFIG)"
+	[[ "${result}" == "${host_file}" ]]
+}
+
+@test "resolve_config: invalid selection re-prompts then succeeds" {
+	local target="${TEST_TMPDIR}/new.json"
+	local default="${TEST_TMPDIR}/default.json"
+	echo '{"default":true}' >"${default}"
+	local host_file="${TEST_TMPDIR}/host.json"
+	echo '{"host":true}' >"${host_file}"
+
+	# "9\n" is invalid, prompt_choice rejects it, then "3\n" copies host.
+	# prompt_choice prints "Invalid choice. Enter 1-4." before re-prompting.
+	run bash -c '
+		source "'"${SCRIPT_DIR}"'/dockcode"
+		export DOCKCODE_CONFIG_DIR="'"${DOCKCODE_CONFIG_DIR}"'"
+		export CONFIG_FILE="'"${CONFIG_FILE}"'"
+		printf "9\n3\n" | resolve_config "'"${target}"'" "'"${default}"'" "opencode.json" "opencode.json" "'"${host_file}"'"
+	'
+	[[ "${status}" -eq 0 ]]
+	[[ "${output}" == *"Invalid choice"* ]]
+	[[ -f "${target}" ]]
+	grep -q '"host":true' "${target}"
+}
+
 @test "resolve_config: choice 1 error when default not found" {
 	local target="${TEST_TMPDIR}/new.json"
 	local default="${TEST_TMPDIR}/nonexistent.json"
@@ -42,7 +82,7 @@ load test_helper
 		source "'"${SCRIPT_DIR}"'/dockcode"
 		export DOCKCODE_CONFIG_DIR="'"${DOCKCODE_CONFIG_DIR}"'"
 		export CONFIG_FILE="'"${CONFIG_FILE}"'"
-		printf "1\n3" | resolve_config "'"${target}"'" "'"${default}"'" "opencode.json" "opencode.json" "'"${host_file}"'"
+		printf "1\n3\n" | resolve_config "'"${target}"'" "'"${default}"'" "opencode.json" "opencode.json" "'"${host_file}"'"
 	'
 	[[ "${output}" == *"Project default not found"* ]]
 	[[ -f "${target}" ]]
@@ -81,7 +121,7 @@ load test_helper
 		printf "4\n'"${custom_file}"'\n" | resolve_config "'"${target}"'" "'"${default}"'" "opencode.json" "opencode.json" "/tmp/host.json"
 	'
 	[[ "${status}" -eq 0 ]]
-	[[ "${output}" == *"Copied opencode.json"* ]]
+	[[ "${output}" == *"Updated opencode.json"* ]]
 }
 
 @test "resolve_config: choice 4 error when custom path not found" {

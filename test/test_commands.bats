@@ -115,6 +115,81 @@ load test_helper
 	[[ "${output}" == *"Aborted"* ]]
 }
 
+@test "handle_destroy: abort on empty confirmation" {
+	set_mock_response "sandbox_rm" ""
+	run bash -c '
+		source "'"${SCRIPT_DIR}"'/dockcode"
+		export DOCKCODE_CONFIG_DIR="'"${DOCKCODE_CONFIG_DIR}"'"
+		export CONFIG_FILE="'"${CONFIG_FILE}"'"
+		export MOCK_CALLS="'"${MOCK_CALLS}"'"
+		export MOCK_RESPONSES_DIR="'"${MOCK_RESPONSES_DIR}"'"
+		handle_destroy -n test-sandbox <<< ""
+	'
+	[[ "${status}" -eq 0 ]]
+	[[ "${output}" == *"Aborted"* ]]
+	assert_no_docker_calls
+}
+
+@test "handle_destroy: confirms with uppercase Y" {
+	set_mock_response "sandbox_rm" ""
+	run bash -c '
+		source "'"${SCRIPT_DIR}"'/dockcode"
+		export DOCKCODE_CONFIG_DIR="'"${DOCKCODE_CONFIG_DIR}"'"
+		export CONFIG_FILE="'"${CONFIG_FILE}"'"
+		export MOCK_CALLS="'"${MOCK_CALLS}"'"
+		export MOCK_RESPONSES_DIR="'"${MOCK_RESPONSES_DIR}"'"
+		handle_destroy -n test-sandbox <<< "Y"
+	'
+	[[ "${status}" -eq 0 ]]
+	assert_docker_called_with "sandbox rm test-sandbox"
+	[[ "${output}" == *"destroyed"* ]]
+}
+
+@test "handle_destroy: confirms with yes" {
+	set_mock_response "sandbox_rm" ""
+	run bash -c '
+		source "'"${SCRIPT_DIR}"'/dockcode"
+		export DOCKCODE_CONFIG_DIR="'"${DOCKCODE_CONFIG_DIR}"'"
+		export CONFIG_FILE="'"${CONFIG_FILE}"'"
+		export MOCK_CALLS="'"${MOCK_CALLS}"'"
+		export MOCK_RESPONSES_DIR="'"${MOCK_RESPONSES_DIR}"'"
+		handle_destroy -n test-sandbox <<< "yes"
+	'
+	[[ "${status}" -eq 0 ]]
+	assert_docker_called_with "sandbox rm test-sandbox"
+	[[ "${output}" == *"destroyed"* ]]
+}
+
+@test "handle_destroy: confirms with Yes" {
+	set_mock_response "sandbox_rm" ""
+	run bash -c '
+		source "'"${SCRIPT_DIR}"'/dockcode"
+		export DOCKCODE_CONFIG_DIR="'"${DOCKCODE_CONFIG_DIR}"'"
+		export CONFIG_FILE="'"${CONFIG_FILE}"'"
+		export MOCK_CALLS="'"${MOCK_CALLS}"'"
+		export MOCK_RESPONSES_DIR="'"${MOCK_RESPONSES_DIR}"'"
+		handle_destroy -n test-sandbox <<< "Yes"
+	'
+	[[ "${status}" -eq 0 ]]
+	assert_docker_called_with "sandbox rm test-sandbox"
+	[[ "${output}" == *"destroyed"* ]]
+}
+
+@test "handle_destroy: aborts on arbitrary text" {
+	set_mock_response "sandbox_rm" ""
+	run bash -c '
+		source "'"${SCRIPT_DIR}"'/dockcode"
+		export DOCKCODE_CONFIG_DIR="'"${DOCKCODE_CONFIG_DIR}"'"
+		export CONFIG_FILE="'"${CONFIG_FILE}"'"
+		export MOCK_CALLS="'"${MOCK_CALLS}"'"
+		export MOCK_RESPONSES_DIR="'"${MOCK_RESPONSES_DIR}"'"
+		handle_destroy -n test-sandbox <<< "destroy"
+	'
+	[[ "${status}" -eq 0 ]]
+	[[ "${output}" == *"Aborted"* ]]
+	assert_no_docker_calls
+}
+
 @test "handle_destroy: errors on unknown flag" {
 	run handle_destroy --unknown
 	[[ "${status}" -eq 1 ]]

@@ -53,6 +53,32 @@ load test_helper
 	[[ "${output}" == *"requires a value"* ]]
 }
 
+@test "handle_settings_update: choice 1 manual edit with editor" {
+	set_mock_response "sandbox_ls" '{"vms":[{"name":"test-sandbox"}]}'
+	set_mock_response "sandbox_exec" '{"model":"original"}'
+
+	# Create a fake editor that appends a marker to the temp file
+	local editor_script="${TEST_TMPDIR}/fake_editor.sh"
+	printf '#!/bin/bash\necho ",\"edited\":true}" >> "$1"\n' >"${editor_script}"
+	chmod +x "${editor_script}"
+
+	run bash -c '
+		source "'"${SCRIPT_DIR}"'/dockcode"
+		export DOCKCODE_CONFIG_DIR="'"${DOCKCODE_CONFIG_DIR}"'"
+		export CONFIG_FILE="'"${CONFIG_FILE}"'"
+		export OPENCODE_CONFIG="'"${OPENCODE_CONFIG}"'"
+		export AUTH_CONFIG="'"${AUTH_CONFIG}"'"
+		export MOCK_CALLS="'"${MOCK_CALLS}"'"
+		export MOCK_RESPONSES_DIR="'"${MOCK_RESPONSES_DIR}"'"
+		export EDITOR="'"${editor_script}"'"
+		handle_settings_update -n test-sandbox <<< "1"
+	'
+	[[ "${status}" -eq 0 ]]
+	assert_docker_called_with "sandbox exec test-sandbox cat"
+	assert_docker_called_with "sandbox exec -i test-sandbox bash"
+	[[ "${output}" == *"Config updated"* ]]
+}
+
 @test "handle_settings_update: choice 2 re-imports from host" {
 	echo '{"model":"updated"}' >"${OPENCODE_CONFIG}"
 	set_mock_response "sandbox_ls" '{"vms":[{"name":"test-sandbox"}]}'
