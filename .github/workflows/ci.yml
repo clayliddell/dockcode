@@ -16,7 +16,11 @@ jobs:
     runs-on: ubuntu-latest
     needs: lint
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout repo and modules
+        uses: actions/checkout@v4
+        with:
+          # 'recursive' checks out all submodules, including nested ones (bats)
+          submodules: recursive
       - name: Run tests
         run: |
           chmod +x ./test/bats/bin/bats
